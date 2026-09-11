@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -88,6 +89,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.i20mileage.data.FuelLog
 import com.example.i20mileage.data.Trip
@@ -195,8 +197,9 @@ private fun MileageApp(
     val fuelLogs by vm.fuelLogs.collectAsState()
     val isTracking = trackingRequested || activeTrip != null
     var currentSpeedKmh by remember { mutableStateOf(0f) }
+    val context = LocalContext.current
 
-    DisposableEffect(Unit) {
+    DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(context: Context?, intent: android.content.Intent?) {
                 if (intent?.action == TripLoggingService.ACTION_SPEED_UPDATE) {
@@ -206,12 +209,12 @@ private fun MileageApp(
         }
         val filter = IntentFilter(TripLoggingService.ACTION_SPEED_UPDATE)
         if (Build.VERSION.SDK_INT >= 33) {
-            registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
+            context.registerReceiver(receiver, filter, Context.RECEIVER_NOT_EXPORTED)
         } else {
             @Suppress("DEPRECATION")
-            registerReceiver(receiver, filter)
+            context.registerReceiver(receiver, filter)
         }
-        onDispose { unregisterReceiver(receiver) }
+        onDispose { context.unregisterReceiver(receiver) }
     }
 
     Scaffold(
