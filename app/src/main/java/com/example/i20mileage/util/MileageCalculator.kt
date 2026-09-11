@@ -12,32 +12,37 @@ data class MileageResult(
 )
 
 /**
- * Mileage = distance driven between two consecutive FULL-TANK fill-ups / liters
- * added at the second (later) fill-up.
+ * Full-tank-to-full-tank mileage calculation.
  *
- * Why this method: you can't know the tank was truly "full" from GPS/OBD alone,
- * so the full-tank-to-full-tank window is the only self-consistent way to measure
- * consumption without a working fuel-level sensor reading.
+ * When both full-tank entries contain odometer readings, the car's odometer
+ * difference is the preferred distance source. GPS trip distance remains the
+ * fallback for older entries that do not have usable odometer readings.
  */
 class MileageCalculator(private val db: AppDatabase) {
 
     suspend fun calculateLatestMileage(): MileageResult? {
         val latestFill = db.fuelLogDao().getFullTankFillAtOffset(0) ?: return null
         val previousFill = db.fuelLogDao().getFullTankFillAtOffset(1) ?: return null
-
         return calculateBetween(previousFill, latestFill)
     }
 
     private suspend fun calculateBetween(from: FuelLog, to: FuelLog): MileageResult? {
-        val distanceMeters = db.tripDao().totalDistanceBetween(from.timestampMillis, to.timestampMillis)
-        val distanceKm = distanceMeters / 1000.0
+        if (to.litersFilled <= 0) return null
 
-        if (to.litersFilled <= 0 || distanceKm <= 0) return null
+        val odometerDistance = if (from.odometerKm != null && to.odometerKm != null) {
+            val difference = to.odometerKm - from.odometerKm
+            if (difference > 0) difference else null
+        } else null
 
-        val kmpl = distanceKm / to.litersFilled
+        val distanceKm = odometerDistance ?: run {
+            val distanceMeters = db.tripDao().totalDistanceBetween(from.timestampMillis, to.timestampMillis)
+            distanceMeters / 1000.0
+        }
+
+        if (distanceKm <= 0) return null
 
         return MileageResult(
-            kmpl = kmpl,
+            kmpl = distanceKm / to.litersFilled,
             distanceKm = distanceKm,
             litersUsed = to.litersFilled,
             fromDate = from.timestampMillis,
@@ -45,7 +50,6 @@ class MileageCalculator(private val db: AppDatabase) {
         )
     }
 
-    /** Simple average across all full-tank windows, for a "lifetime average" stat. */
     suspend fun calculateOverallAverage(): Double? {
         val allFullTanks = mutableListOf<FuelLog>()
         var offset = 0
@@ -56,7 +60,6 @@ class MileageCalculator(private val db: AppDatabase) {
         }
         if (allFullTanks.size < 2) return null
 
-        // oldest -> newest
         val chronological = allFullTanks.reversed()
         var totalDistanceKm = 0.0
         var totalLiters = 0.0
@@ -64,9 +67,17 @@ class MileageCalculator(private val db: AppDatabase) {
         for (i in 1 until chronological.size) {
             val from = chronological[i - 1]
             val to = chronological[i]
-            val distanceMeters = db.tripDao().totalDistanceBetween(from.timestampMillis, to.timestampMillis)
-            totalDistanceKm += distanceMeters / 1000.0
-            totalLiters += to.litersFilled
+            val odometerDistance = if (from.odometerKm != null && to.odometerKm != null) {
+                val difference = to.odometerKm - from.odometerKm
+                if (difference > 0) difference else null
+            } else null
+            val distanceKm = odometerDistance ?: db.tripDao()
+                .totalDistanceBetween(from.timestampMillis, to.timestampMillis) / 1000.0
+
+            if (distanceKm > 0 && to.litersFilled > 0) {
+                totalDistanceKm += distanceKm
+                totalLiters += to.litersFilled
+            }
         }
 
         return if (totalLiters > 0) totalDistanceKm / totalLiters else null

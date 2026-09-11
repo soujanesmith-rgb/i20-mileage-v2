@@ -6,18 +6,24 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -26,10 +32,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalGasStation
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
@@ -37,21 +47,23 @@ import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.lightColorScheme
+import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -61,6 +73,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,6 +88,21 @@ import com.example.i20mileage.ui.MileageViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.roundToInt
+
+private val Navy = Color(0xFF07111F)
+private val Navy2 = Color(0xFF0B1728)
+private val Surface1 = Color(0xFF102137)
+private val Surface2 = Color(0xFF142A43)
+private val Border = Color(0xFF223A54)
+private val PrimaryBlue = Color(0xFF1683FF)
+private val Cyan = Color(0xFF20D6E8)
+private val Success = Color(0xFF18D69A)
+private val Warning = Color(0xFFFFB020)
+private val Error = Color(0xFFFF5C67)
+private val FuelGreen = Color(0xFF20D6A0)
+private val TextPrimary = Color(0xFFF5F8FC)
+private val TextSecondary = Color(0xFF91A4B8)
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -84,7 +112,7 @@ class MainActivity : ComponentActivity() {
                 var ready by remember {
                     mutableStateOf(PermissionState.isFullyReadyForTracking(this@MainActivity))
                 }
-                Surface(modifier = Modifier.fillMaxSize()) {
+                Surface(modifier = Modifier.fillMaxSize(), color = Navy) {
                     if (ready) {
                         MileageApp(
                             onStartTracking = { startTripLoggingService() },
@@ -115,15 +143,22 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun I20MileageTheme(content: @Composable () -> Unit) {
-    val colors = lightColorScheme(
-        primary = Color(0xFF244B73),
+    val colors = darkColorScheme(
+        primary = PrimaryBlue,
         onPrimary = Color.White,
-        primaryContainer = Color(0xFFD9E9FA),
-        onPrimaryContainer = Color(0xFF0B2943),
-        secondary = Color(0xFF48657E),
-        secondaryContainer = Color(0xFFDCEAF5),
-        background = Color(0xFFF5F7FA),
-        surface = Color.White
+        primaryContainer = Color(0xFF0E3560),
+        onPrimaryContainer = TextPrimary,
+        secondary = Cyan,
+        onSecondary = Navy,
+        secondaryContainer = Color(0xFF123B4A),
+        onSecondaryContainer = TextPrimary,
+        background = Navy,
+        surface = Surface1,
+        onSurface = TextPrimary,
+        surfaceVariant = Surface2,
+        onSurfaceVariant = TextSecondary,
+        outline = Border,
+        error = Error
     )
     MaterialTheme(colorScheme = colors, content = content)
 }
@@ -136,6 +171,7 @@ private fun MileageApp(
 ) {
     var selectedTab by remember { mutableIntStateOf(0) }
     var showFuelDialog by remember { mutableStateOf(false) }
+    var showStopDialog by remember { mutableStateOf(false) }
     var trackingRequested by remember { mutableStateOf(false) }
 
     val latestMileage by vm.latestMileage.collectAsState()
@@ -145,38 +181,12 @@ private fun MileageApp(
     val activeTrip by vm.activeTrip.collectAsState()
     val trips by vm.trips.collectAsState()
     val fuelLogs by vm.fuelLogs.collectAsState()
-
     val isTracking = trackingRequested || activeTrip != null
 
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = Navy,
         bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = selectedTab == 0,
-                    onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.Speed, contentDescription = null) },
-                    label = { Text("Dashboard") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 1,
-                    onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Default.LocalGasStation, contentDescription = null) },
-                    label = { Text("Fuel") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 2,
-                    onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Default.History, contentDescription = null) },
-                    label = { Text("History") }
-                )
-                NavigationBarItem(
-                    selected = selectedTab == 3,
-                    onClick = { selectedTab = 3 },
-                    icon = { Icon(Icons.Default.Settings, contentDescription = null) },
-                    label = { Text("Settings") }
-                )
-            }
+            AutomotiveNavigation(selectedTab = selectedTab, onSelect = { selectedTab = it })
         }
     ) { padding ->
         when (selectedTab) {
@@ -192,11 +202,7 @@ private fun MileageApp(
                     trackingRequested = true
                     onStartTracking()
                 },
-                onStopTracking = {
-                    trackingRequested = false
-                    onStopTracking()
-                    vm.refresh()
-                },
+                onStopTracking = { showStopDialog = true },
                 onAddFuel = { showFuelDialog = true },
                 recentTrips = trips.take(4),
                 latestFuel = fuelLogs.firstOrNull()
@@ -207,11 +213,7 @@ private fun MileageApp(
                 latestMileage = latestMileage?.kmpl,
                 onAddFuel = { showFuelDialog = true }
             )
-            2 -> HistoryScreen(
-                modifier = Modifier.padding(padding),
-                trips = trips,
-                fuelLogs = fuelLogs
-            )
+            2 -> HistoryScreen(modifier = Modifier.padding(padding), trips = trips, fuelLogs = fuelLogs)
             else -> SettingsScreen(modifier = Modifier.padding(padding))
         }
     }
@@ -224,6 +226,70 @@ private fun MileageApp(
                 showFuelDialog = false
             }
         )
+    }
+
+    if (showStopDialog) {
+        AlertDialog(
+            onDismissRequest = { showStopDialog = false },
+            containerColor = Surface1,
+            titleContentColor = TextPrimary,
+            textContentColor = TextSecondary,
+            title = { Text("Stop trip tracking?", fontWeight = FontWeight.Bold) },
+            text = { Text("The current trip will be saved to History.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showStopDialog = false
+                        trackingRequested = false
+                        onStopTracking()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = Error)
+                ) { Text("Stop & Save") }
+            },
+            dismissButton = { TextButton(onClick = { showStopDialog = false }) { Text("Cancel") } }
+        )
+    }
+}
+
+@Composable
+private fun AutomotiveNavigation(selectedTab: Int, onSelect: (Int) -> Unit) {
+    val items = listOf(
+        "Dashboard" to Icons.Default.Speed,
+        "Fuel" to Icons.Default.LocalGasStation,
+        "History" to Icons.Default.History,
+        "Settings" to Icons.Default.Settings
+    )
+    Surface(
+        color = Navy2,
+        tonalElevation = 0.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(WindowInsets.navigationBars)
+            .border(1.dp, Border)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().height(72.dp).padding(horizontal = 14.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            items.forEachIndexed { index, (label, icon) ->
+                val selected = index == selectedTab
+                Column(
+                    modifier = Modifier
+                        .width(120.dp)
+                        .fillMaxHeight()
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(if (selected) Color(0xFF0E3560) else Color.Transparent)
+                        .clickable { onSelect(index) }
+                        .padding(horizontal = 12.dp, vertical = 5.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
+                ) {
+                    Icon(icon, contentDescription = label, tint = if (selected) Cyan else TextSecondary, modifier = Modifier.size(24.dp))
+                    Text(label, color = if (selected) TextPrimary else TextSecondary, style = MaterialTheme.typography.labelMedium, fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
+                }
+            }
+        }
     }
 }
 
@@ -242,71 +308,68 @@ private fun DashboardScreen(
     recentTrips: List<Trip>,
     latestFuel: FuelLog?
 ) {
+    val tripDistance = activeTrip?.distanceMeters?.div(1000.0) ?: 0.0
+    val tripDuration = activeTrip?.let { formatDuration(it.startTimeMillis, System.currentTimeMillis()) }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 22.dp, vertical = 18.dp),
+        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 22.dp, vertical = 18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(14.dp))
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Default.DirectionsCar, contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    Text("i20 MILEAGE", color = TextPrimary, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                    Text("Drive smarter. Go farther.", color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
                 }
-                Spacer(Modifier.width(12.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("i20 Mileage", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Text("Driving dashboard", style = MaterialTheme.typography.bodyMedium)
-                }
-                StatusPill(isTracking)
+                StatusPill(active = isTracking)
             }
         }
 
         item {
             Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(26.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+                colors = CardDefaults.cardColors(containerColor = Surface1),
+                shape = RoundedCornerShape(24.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Border),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                if (isTracking) "TRIP IN PROGRESS" else "READY TO DRIVE",
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Spacer(Modifier.height(3.dp))
-                            Text(
-                                if (isTracking) "GPS distance recording"
-                                else "Tap Start before your journey",
-                                style = MaterialTheme.typography.bodyLarge
-                            )
-                        }
-                        Icon(Icons.Default.Timer, contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
-                    }
-
-                    Text(
-                        activeTrip?.let { formatKm(it.distanceMeters / 1000.0) } ?: "0.0",
-                        style = MaterialTheme.typography.displaySmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text("CURRENT TRIP • km", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-
-                    Button(
-                        onClick = if (isTracking) onStopTracking else onStartTracking,
-                        modifier = Modifier.fillMaxWidth().height(56.dp),
-                        shape = RoundedCornerShape(16.dp)
+                Row(modifier = Modifier.fillMaxWidth().padding(22.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .size(210.dp)
+                            .clip(CircleShape)
+                            .background(Brush.radialGradient(listOf(Color(0xFF123B64), Navy2))),
+                        contentAlignment = Alignment.Center
                     ) {
-                        Icon(if (isTracking) Icons.Default.Stop else Icons.Default.PlayArrow, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(if (isTracking) "Stop & Save Trip" else "Start Tracking", fontWeight = FontWeight.Bold)
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(if (isTracking) "CURRENT TRIP" else "READY TO DRIVE", color = TextSecondary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                            Text(formatOneDecimal(tripDistance), color = TextPrimary, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+                            Text("km", color = Cyan, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            if (isTracking) Text(tripDuration ?: "00:00", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                    Spacer(Modifier.width(24.dp))
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Text(if (isTracking) "TRIP IN PROGRESS" else "TRIP CONTROL", color = TextSecondary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+                        Text(if (isTracking) "GPS distance tracking is active" else "Start when you begin driving", color = TextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        if (isTracking) {
+                            Button(onClick = onStopTracking, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = Error), shape = RoundedCornerShape(14.dp)) {
+                                Icon(Icons.Default.Stop, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("STOP & SAVE TRIP", fontWeight = FontWeight.Bold)
+                            }
+                        } else {
+                            Button(onClick = onStartTracking, modifier = Modifier.fillMaxWidth(), colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue), shape = RoundedCornerShape(14.dp)) {
+                                Icon(Icons.Default.PlayArrow, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("START TRACKING", fontWeight = FontWeight.Bold)
+                            }
+                        }
+                        OutlinedButton(onClick = onAddFuel, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp)) {
+                            Icon(Icons.Default.Add, contentDescription = null)
+                            Spacer(Modifier.width(8.dp))
+                            Text("ADD FUEL")
+                        }
                     }
                 }
             }
@@ -314,269 +377,323 @@ private fun DashboardScreen(
 
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                BigStat("Latest", latestMileage?.let { "${formatKm(it)} km/L" } ?: "--", Modifier.weight(1f))
-                BigStat("Average", averageMileage?.let { "${formatKm(it)} km/L" } ?: "--", Modifier.weight(1f))
+                MetricCard("LATEST", formatMileage(latestMileage), "km/L", Modifier.weight(1f))
+                MetricCard("AVERAGE", formatMileage(averageMileage), "km/L", Modifier.weight(1f))
+                MetricCard("TODAY", formatOneDecimal(todayDistanceKm), "km", Modifier.weight(1f))
+                MetricCard("TOTAL", formatOneDecimal(totalDistanceKm), "km", Modifier.weight(1f))
             }
         }
 
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                BigStat("Today", "${formatKm(todayDistanceKm)} km", Modifier.weight(1f))
-                BigStat("All trips", "${formatKm(totalDistanceKm)} km", Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.fillMaxWidth()) {
+                FuelSnapshot(latestFuel, onAddFuel, Modifier.weight(1.1f))
+                QuickInsight(latestMileage, averageMileage, Modifier.weight(0.9f))
             }
         }
 
-        item {
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp)) {
-                Row(modifier = Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.LocalGasStation, contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
-                    Spacer(Modifier.width(12.dp))
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Fuel", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                        Text(
-                            latestFuel?.let { "Last fill: ${formatKm(it.litersFilled)} L" } ?: "No fill-up recorded yet",
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                    FilledTonalButton(onClick = onAddFuel) {
-                        Icon(Icons.Default.Add, contentDescription = null)
-                        Spacer(Modifier.width(4.dp))
-                        Text("Add fuel")
-                    }
-                }
-            }
-        }
-
-        if (recentTrips.isNotEmpty()) {
-            item { Text("Recent trips", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+        item { SectionHeader("RECENT TRIPS", "HISTORY") }
+        if (recentTrips.isEmpty()) {
+            item { EmptyState("No trips recorded yet", "Start tracking your next drive to build your history.", "START TRACKING") }
+        } else {
             items(recentTrips, key = { it.id }) { trip -> TripRow(trip) }
         }
     }
 }
 
 @Composable
-private fun StatusPill(isTracking: Boolean) {
-    val bg = if (isTracking) Color(0xFFDDF4E5) else Color(0xFFE9EEF3)
-    val fg = if (isTracking) Color(0xFF1D6A38) else Color(0xFF52606D)
+private fun StatusPill(active: Boolean) {
     Row(
-        modifier = Modifier.clip(RoundedCornerShape(50)).background(bg).padding(horizontal = 12.dp, vertical = 7.dp),
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(if (active) Color(0xFF103A2F) else Color(0xFF14263A)).padding(horizontal = 12.dp, vertical = 7.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(fg))
+        Box(modifier = Modifier.size(8.dp).clip(CircleShape).background(if (active) Success else TextSecondary))
         Spacer(Modifier.width(7.dp))
-        Text(if (isTracking) "TRACKING" else "READY", color = fg, fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.labelMedium)
+        Text(if (active) "TRACKING" else "READY", color = if (active) Success else TextSecondary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
     }
 }
 
 @Composable
-private fun BigStat(title: String, value: String, modifier: Modifier) {
-    Card(modifier = modifier, shape = RoundedCornerShape(20.dp)) {
-        Column(modifier = Modifier.padding(18.dp)) {
-            Text(title.uppercase(Locale.getDefault()), style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(7.dp))
-            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
-                maxLines = 1, overflow = TextOverflow.Ellipsis)
+private fun MetricCard(label: String, value: String, unit: String, modifier: Modifier = Modifier) {
+    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = Surface1), shape = RoundedCornerShape(18.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
+        Column(modifier = Modifier.padding(15.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.Bottom) {
+                Text(value, color = TextPrimary, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.width(4.dp))
+                Text(unit, color = Cyan, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
         }
     }
 }
 
 @Composable
-private fun FuelScreen(
-    modifier: Modifier,
-    fuelLogs: List<FuelLog>,
-    latestMileage: Double?,
-    onAddFuel: () -> Unit
-) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(22.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text("Fuel & Mileage", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-                    Text("Record full-tank fills for accurate km/L", style = MaterialTheme.typography.bodyMedium)
+private fun FuelSnapshot(fuel: FuelLog?, onAddFuel: () -> Unit, modifier: Modifier = Modifier) {
+    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = Surface1), shape = RoundedCornerShape(20.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.size(38.dp).clip(CircleShape).background(Color(0xFF103A2F)), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.LocalGasStation, contentDescription = null, tint = FuelGreen)
+                    }
+                    Spacer(Modifier.width(10.dp))
+                    Text("FUEL STATUS", color = TextSecondary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
-                FilledTonalButton(onClick = onAddFuel) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(Modifier.width(4.dp))
-                    Text("Add fill-up")
+                Icon(Icons.Default.ArrowForward, contentDescription = null, tint = TextSecondary)
+            }
+            if (fuel == null) {
+                Text("No fuel records yet", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text("Add a full-tank entry to calculate mileage.", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                FilledTonalButton(onClick = onAddFuel, colors = ButtonDefaults.filledTonalButtonColors(containerColor = Color(0xFF123B4A), contentColor = Cyan)) { Text("ADD FUEL") }
+            } else {
+                Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
+                    StatPair("LAST FILL", "${formatOneDecimal(fuel.litersFilled)} L")
+                    StatPair("PRICE", fuel.pricePerLiter?.let { "₹${formatOneDecimal(it)}/L" } ?: "Not set")
+                    StatPair("ODOMETER", fuel.odometerKm?.let { formatOneDecimal(it) } ?: "Not set")
+                }
+                Text(formatDate(fuel.timestampMillis) + if (fuel.isFullTank) "  ·  FULL TANK" else "  ·  PARTIAL", color = FuelGreen, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuickInsight(latest: Double?, average: Double?, modifier: Modifier = Modifier) {
+    Card(modifier = modifier, colors = CardDefaults.cardColors(containerColor = Color(0xFF0C2036)), shape = RoundedCornerShape(20.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF1E486D))) {
+        Column(modifier = Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("MILEAGE INSIGHT", color = TextSecondary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+            Text(formatMileage(latest) + " km/L", color = Cyan, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+            Text(if (latest != null && average != null) {
+                val diff = ((latest - average) / average * 100).roundToInt()
+                if (diff >= 0) "$diff% above your overall average" else "${-diff}% below your overall average"
+            } else "Record two full-tank fills to unlock mileage comparison.", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String, action: String? = null) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+        Text(title, color = TextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        if (action != null) Text(action, color = Cyan, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun TripRow(trip: Trip) {
+    Card(colors = CardDefaults.cardColors(containerColor = Surface1), shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border), modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(15.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(38.dp).clip(CircleShape).background(Color(0xFF123B4A)), contentAlignment = Alignment.Center) {
+                Icon(Icons.Default.DirectionsCar, contentDescription = null, tint = Cyan, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(formatDate(trip.startTimeMillis), color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text(formatDuration(trip.startTimeMillis, trip.endTimeMillis ?: System.currentTimeMillis()), color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text("${formatOneDecimal(trip.distanceMeters / 1000.0)} km", color = TextPrimary, fontWeight = FontWeight.Bold)
+                Text(if (trip.isActive) "ONGOING" else "COMPLETED", color = if (trip.isActive) Success else TextSecondary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FuelScreen(modifier: Modifier, fuelLogs: List<FuelLog>, latestMileage: Double?, onAddFuel: () -> Unit) {
+    val totalFuel = fuelLogs.sumOf { it.litersFilled }
+    val totalCost = fuelLogs.sumOf { (it.pricePerLiter ?: 0.0) * it.litersFilled }
+    val priced = fuelLogs.filter { it.pricePerLiter != null }
+    val avgPrice = if (priced.isNotEmpty()) priced.sumOf { it.pricePerLiter!! * it.litersFilled } / priced.sumOf { it.litersFilled } else null
+
+    LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 22.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item { ScreenHeader("FUEL", "Fill-ups, cost and mileage inputs") }
+        item {
+            Card(colors = CardDefaults.cardColors(containerColor = Surface1), shape = RoundedCornerShape(22.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(modifier = Modifier.size(52.dp).clip(CircleShape).background(Color(0xFF103A2F)), contentAlignment = Alignment.Center) { Icon(Icons.Default.LocalGasStation, contentDescription = null, tint = FuelGreen, modifier = Modifier.size(28.dp)) }
+                        Spacer(Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("FUEL LOG", color = TextPrimary, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                            Text("Keep full-tank entries consistent for reliable mileage.", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                        }
+                        Button(onClick = onAddFuel, colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue), shape = RoundedCornerShape(13.dp)) { Icon(Icons.Default.Add, contentDescription = null); Spacer(Modifier.width(6.dp)); Text("ADD FUEL") }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                        MetricCard("TOTAL FUEL", formatOneDecimal(totalFuel), "L", Modifier.weight(1f))
+                        MetricCard("AVG PRICE", avgPrice?.let { "₹${formatOneDecimal(it)}" } ?: "—", "/L", Modifier.weight(1f))
+                        MetricCard("TOTAL COST", if (totalCost > 0) "₹${formatWhole(totalCost)}" else "—", "", Modifier.weight(1f))
+                        MetricCard("LATEST", formatMileage(latestMileage), "km/L", Modifier.weight(1f))
+                    }
                 }
             }
         }
-        item {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                BigStat("Latest mileage", latestMileage?.let { "${formatKm(it)} km/L" } ?: "--", Modifier.weight(1f))
-                BigStat("Fill-ups", fuelLogs.size.toString(), Modifier.weight(1f))
+        item { SectionHeader("FUEL HISTORY") }
+        if (fuelLogs.isEmpty()) item { EmptyState("No fuel records yet", "Add your first full-tank fill-up to start calculating mileage.", "ADD FUEL", onAddFuel) }
+        else items(fuelLogs, key = { it.id }) { FuelRow(it) }
+    }
+}
+
+@Composable
+private fun FuelRow(fuel: FuelLog) {
+    Card(colors = CardDefaults.cardColors(containerColor = Surface1), shape = RoundedCornerShape(16.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border), modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.size(40.dp).clip(CircleShape).background(Color(0xFF103A2F)), contentAlignment = Alignment.Center) { Icon(Icons.Default.LocalGasStation, contentDescription = null, tint = FuelGreen, modifier = Modifier.size(21.dp)) }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(formatDate(fuel.timestampMillis), color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                Text(if (fuel.isFullTank) "Full tank" else "Partial fill", color = if (fuel.isFullTank) FuelGreen else Warning, style = MaterialTheme.typography.bodySmall)
+                fuel.odometerKm?.let { Text("Odometer ${formatOneDecimal(it)} km", color = TextSecondary, style = MaterialTheme.typography.bodySmall) }
             }
-        }
-        if (fuelLogs.isEmpty()) {
-            item { EmptyState("No fuel records", "Add each full-tank fill-up to calculate real tank-to-tank mileage.") }
-        } else {
-            item { Text("Fill-up history", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-            items(fuelLogs, key = { it.id }) { FuelRow(it) }
+            Column(horizontalAlignment = Alignment.End) {
+                Text("${formatOneDecimal(fuel.litersFilled)} L", color = TextPrimary, fontWeight = FontWeight.Bold)
+                fuel.pricePerLiter?.let { Text("₹${formatOneDecimal(it)}/L", color = TextSecondary, style = MaterialTheme.typography.bodySmall) }
+            }
         }
     }
 }
 
 @Composable
 private fun HistoryScreen(modifier: Modifier, trips: List<Trip>, fuelLogs: List<FuelLog>) {
-    LazyColumn(
-        modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(22.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        item { Text("History", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) }
-        item { Text("Trips and fuel entries", style = MaterialTheme.typography.bodyMedium) }
-        if (trips.isEmpty() && fuelLogs.isEmpty()) {
-            item { EmptyState("No history yet", "Your trips and fill-ups will appear here.") }
-        }
-        if (trips.isNotEmpty()) {
-            item { Text("Trips", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-            items(trips, key = { "trip-${it.id}" }) { TripRow(it) }
-        }
-        if (fuelLogs.isNotEmpty()) {
-            item { Text("Fuel", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-            items(fuelLogs, key = { "fuel-${it.id}" }) { FuelRow(it) }
-        }
-    }
-}
-
-@Composable
-private fun TripRow(trip: Trip) {
-    Card(shape = RoundedCornerShape(18.dp)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier.size(42.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Default.DirectionsCar, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(formatDate(trip.startTimeMillis), fontWeight = FontWeight.SemiBold)
-                Text(if (trip.isActive) "In progress" else "Completed", style = MaterialTheme.typography.bodySmall)
-            }
-            Text("${formatKm(trip.distanceMeters / 1000.0)} km", fontWeight = FontWeight.Bold)
-        }
-    }
-}
-
-@Composable
-private fun FuelRow(fuel: FuelLog) {
-    Card(shape = RoundedCornerShape(18.dp)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier.size(42.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Default.LocalGasStation, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(formatDate(fuel.timestampMillis), fontWeight = FontWeight.SemiBold)
-                Text(if (fuel.isFullTank) "Full tank" else "Partial fill", style = MaterialTheme.typography.bodySmall)
-                fuel.odometerKm?.let { Text("Odometer ${formatKm(it)} km", style = MaterialTheme.typography.bodySmall) }
-            }
-            Column(horizontalAlignment = Alignment.End) {
-                Text("${formatKm(fuel.litersFilled)} L", fontWeight = FontWeight.Bold)
-                fuel.pricePerLiter?.let { Text("₹${formatKm(it)}/L", style = MaterialTheme.typography.bodySmall) }
+    LazyColumn(modifier = modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 22.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        item { ScreenHeader("TRIP HISTORY", "Your recorded drives") }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                MetricCard("TRIPS", trips.size.toString(), "", Modifier.weight(1f))
+                MetricCard("DISTANCE", formatOneDecimal(trips.sumOf { it.distanceMeters } / 1000.0), "km", Modifier.weight(1f))
+                MetricCard("FUEL ENTRIES", fuelLogs.size.toString(), "", Modifier.weight(1f))
             }
         }
+        item { SectionHeader("RECORDED TRIPS") }
+        if (trips.isEmpty()) item { EmptyState("No trips yet", "Your completed drives will appear here.", null) }
+        else items(trips, key = { it.id }) { TripRow(it) }
     }
 }
 
 @Composable
 private fun SettingsScreen(modifier: Modifier) {
-    Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-        Card(shape = RoundedCornerShape(22.dp)) {
-            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.DirectionsCar, contentDescription = null, modifier = Modifier.size(30.dp))
-                    Spacer(Modifier.width(10.dp))
-                    Column {
-                        Text("Hyundai i20", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text("GPS mileage tracker", style = MaterialTheme.typography.bodyMedium)
-                    }
-                }
-                Divider()
-                Text("Mileage calculation", fontWeight = FontWeight.Bold)
-                Text("Mileage is calculated from the distance between two full-tank fill-ups divided by the litres added at the later fill-up.")
-            }
+    Column(modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp, vertical = 18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        ScreenHeader("SETTINGS", "Vehicle, tracking and app information")
+        SettingsGroup("VEHICLE") {
+            SettingsRow(Icons.Default.DirectionsCar, "Hyundai i20", "Petrol · Mileage tracker")
         }
-        Card(shape = RoundedCornerShape(22.dp)) {
-            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("GPS tracking", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("The app now calculates trip distance from GPS position changes instead of relying on the vehicle speed value. This is more reliable on Android car head units that report GPS speed as 0.")
-            }
+        SettingsGroup("TRACKING") {
+            SettingsRow(Icons.Default.LocationOn, "GPS distance tracking", "Uses position changes instead of GPS speed")
+            SettingsRow(Icons.Default.Timer, "Trip updates", "High-accuracy location every few seconds")
         }
-        Card(shape = RoundedCornerShape(22.dp)) {
-            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("For accurate mileage", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Text("Keep location permission enabled, allow background location when requested, and record every full-tank fill-up.")
-            }
+        SettingsGroup("MILEAGE") {
+            SettingsRow(Icons.Default.LocalGasStation, "Full-tank method", "Odometer difference is preferred when both fill-ups have readings")
+            SettingsRow(Icons.Default.CheckCircle, "Recommended logging", "Record each full-tank fill with exact litres and odometer")
+        }
+        SettingsGroup("ABOUT") {
+            SettingsRow(Icons.Default.Info, "i20 Mileage", "Version 3.0 · Optimized for Nakamichi NAM5240")
         }
     }
 }
 
 @Composable
-private fun EmptyState(title: String, message: String) {
-    Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp)) {
-        Column(modifier = Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.DirectionsCar, contentDescription = null, modifier = Modifier.size(42.dp))
-            Spacer(Modifier.height(10.dp))
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.height(4.dp))
-            Text(message, style = MaterialTheme.typography.bodyMedium)
-        }
+private fun SettingsGroup(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, color = TextSecondary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+        Card(colors = CardDefaults.cardColors(containerColor = Surface1), shape = RoundedCornerShape(18.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border)) { content() }
     }
 }
 
 @Composable
-private fun AddFuelDialog(
-    onDismiss: () -> Unit,
-    onSave: (Double, Double?, Double?, Boolean, String?) -> Unit
-) {
+private fun SettingsRow(icon: androidx.compose.ui.graphics.vector.ImageVector, title: String, subtitle: String) {
+    Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(40.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xFF123B4A)), contentAlignment = Alignment.Center) { Icon(icon, contentDescription = null, tint = Cyan) }
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+            Text(subtitle, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AddFuelDialog(onDismiss: () -> Unit, onSave: (Double, Double?, Double?, Boolean, String?) -> Unit) {
     var liters by remember { mutableStateOf("") }
     var price by remember { mutableStateOf("") }
     var odometer by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
     var fullTank by remember { mutableStateOf(true) }
+    val valid = liters.toDoubleOrNull()?.let { it > 0 } == true
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add fuel fill-up") },
+        containerColor = Surface1,
+        titleContentColor = TextPrimary,
+        textContentColor = TextSecondary,
+        title = { Text("ADD FUEL", fontWeight = FontWeight.Bold) },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(9.dp)) {
-                OutlinedTextField(liters, { liters = it }, label = { Text("Litres added") }, singleLine = true)
-                OutlinedTextField(price, { price = it }, label = { Text("Price per litre") }, singleLine = true)
-                OutlinedTextField(odometer, { odometer = it }, label = { Text("Odometer km") }, singleLine = true)
-                OutlinedTextField(notes, { notes = it }, label = { Text("Notes (optional)") }, singleLine = true)
-                androidx.compose.material3.Checkbox(checked = fullTank, onCheckedChange = { fullTank = it })
-                Text("This was a full-tank fill-up")
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("Enter the exact pump and odometer values.", style = MaterialTheme.typography.bodySmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    OutlinedTextField(value = liters, onValueChange = { liters = it }, label = { Text("Litres added") }, suffix = { Text("L") }, modifier = Modifier.weight(1f), singleLine = true)
+                    OutlinedTextField(value = price, onValueChange = { price = it }, label = { Text("Price / litre") }, prefix = { Text("₹") }, modifier = Modifier.weight(1f), singleLine = true)
+                }
+                OutlinedTextField(value = odometer, onValueChange = { odometer = it }, label = { Text("Odometer km") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                OutlinedTextField(value = notes, onValueChange = { notes = it }, label = { Text("Notes (optional)") }, modifier = Modifier.fillMaxWidth(), singleLine = true)
+                Row(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).background(Navy2).clickable { fullTank = !fullTank }.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (fullTank) "✓" else "○", color = if (fullTank) FuelGreen else TextSecondary, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text("This was a full-tank fill-up", color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                        Text("Recommended for mileage calculations", color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
             }
         },
         confirmButton = {
             Button(
-                enabled = liters.toDoubleOrNull()?.let { it > 0 } == true,
-                onClick = {
-                    onSave(
-                        liters.toDouble(),
-                        price.toDoubleOrNull(),
-                        odometer.toDoubleOrNull(),
-                        fullTank,
-                        notes.trim().ifBlank { null }
-                    )
-                }
-            ) { Text("Save fill-up") }
+                enabled = valid,
+                onClick = { onSave(liters.toDouble(), price.toDoubleOrNull(), odometer.toDoubleOrNull(), fullTank, notes.ifBlank { null }) },
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+            ) { Text("SAVE FILL-UP", fontWeight = FontWeight.Bold) }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 
+@Composable
+private fun ScreenHeader(title: String, subtitle: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(title, color = TextPrimary, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text(subtitle, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
+private fun EmptyState(title: String, subtitle: String, action: String?, onAction: (() -> Unit)? = null) {
+    Card(colors = CardDefaults.cardColors(containerColor = Surface1), shape = RoundedCornerShape(20.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Border), modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.fillMaxWidth().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Box(modifier = Modifier.size(54.dp).clip(CircleShape).background(Color(0xFF123B4A)), contentAlignment = Alignment.Center) { Icon(Icons.Default.Info, contentDescription = null, tint = Cyan) }
+            Text(title, color = TextPrimary, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(subtitle, color = TextSecondary, style = MaterialTheme.typography.bodySmall)
+            if (action != null) Button(onClick = { onAction?.invoke() }, colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue), shape = RoundedCornerShape(12.dp)) { Text(action) }
+        }
+    }
+}
+
+@Composable
+private fun StatPair(label: String, value: String) {
+    Column {
+        Text(label, color = TextSecondary, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+        Text(value, color = TextPrimary, fontWeight = FontWeight.Bold)
+    }
+}
+
+private fun formatOneDecimal(value: Double): String = String.format(Locale.US, "%,.1f", value)
+private fun formatWhole(value: Double): String = String.format(Locale.US, "%,.0f", value)
+private fun formatMileage(value: Double?): String = value?.let { String.format(Locale.US, "%.1f", it) } ?: "—"
 private fun formatKm(value: Double): String = String.format(Locale.US, "%.1f", value)
-private fun formatDate(time: Long): String = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date(time))
+private fun formatDate(millis: Long): String = SimpleDateFormat("dd MMM yyyy", Locale.US).format(Date(millis))
+private fun formatDuration(start: Long, end: Long): String {
+    val seconds = ((end - start).coerceAtLeast(0L)) / 1000L
+    val hours = seconds / 3600L
+    val minutes = (seconds % 3600L) / 60L
+    val secs = seconds % 60L
+    return if (hours > 0) String.format(Locale.US, "%02d:%02d:%02d", hours, minutes, secs) else String.format(Locale.US, "%02d:%02d", minutes, secs)
+}
