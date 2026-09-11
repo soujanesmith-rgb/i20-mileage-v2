@@ -6,7 +6,18 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -15,19 +26,42 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.DirectionsCar
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Speed
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Divider
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -81,10 +115,17 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun I20MileageTheme(content: @Composable () -> Unit) {
-    MaterialTheme(
-        colorScheme = lightColorScheme(),
-        content = content
+    val colors = lightColorScheme(
+        primary = Color(0xFF244B73),
+        onPrimary = Color.White,
+        primaryContainer = Color(0xFFD9E9FA),
+        onPrimaryContainer = Color(0xFF0B2943),
+        secondary = Color(0xFF48657E),
+        secondaryContainer = Color(0xFFDCEAF5),
+        background = Color(0xFFF5F7FA),
+        surface = Color.White
     )
+    MaterialTheme(colorScheme = colors, content = content)
 }
 
 @Composable
@@ -114,19 +155,25 @@ private fun MileageApp(
                 NavigationBarItem(
                     selected = selectedTab == 0,
                     onClick = { selectedTab = 0 },
-                    icon = { Icon(Icons.Default.Speed, null) },
+                    icon = { Icon(Icons.Default.Speed, contentDescription = null) },
                     label = { Text("Dashboard") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 1,
                     onClick = { selectedTab = 1 },
-                    icon = { Icon(Icons.Default.History, null) },
-                    label = { Text("History") }
+                    icon = { Icon(Icons.Default.LocalGasStation, contentDescription = null) },
+                    label = { Text("Fuel") }
                 )
                 NavigationBarItem(
                     selected = selectedTab == 2,
                     onClick = { selectedTab = 2 },
-                    icon = { Icon(Icons.Default.Settings, null) },
+                    icon = { Icon(Icons.Default.History, contentDescription = null) },
+                    label = { Text("History") }
+                )
+                NavigationBarItem(
+                    selected = selectedTab == 3,
+                    onClick = { selectedTab = 3 },
+                    icon = { Icon(Icons.Default.Settings, contentDescription = null) },
                     label = { Text("Settings") }
                 )
             }
@@ -151,10 +198,16 @@ private fun MileageApp(
                     vm.refresh()
                 },
                 onAddFuel = { showFuelDialog = true },
-                recentTrips = trips.take(3),
+                recentTrips = trips.take(4),
                 latestFuel = fuelLogs.firstOrNull()
             )
-            1 -> HistoryScreen(
+            1 -> FuelScreen(
+                modifier = Modifier.padding(padding),
+                fuelLogs = fuelLogs,
+                latestMileage = latestMileage?.kmpl,
+                onAddFuel = { showFuelDialog = true }
+            )
+            2 -> HistoryScreen(
                 modifier = Modifier.padding(padding),
                 trips = trips,
                 fuelLogs = fuelLogs
@@ -191,109 +244,105 @@ private fun DashboardScreen(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        contentPadding = PaddingValues(horizontal = 22.dp, vertical = 18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
-                    modifier = Modifier.size(46.dp).clip(RoundedCornerShape(14.dp))
+                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(14.dp))
                         .background(MaterialTheme.colorScheme.primaryContainer),
                     contentAlignment = Alignment.Center
-                ) { Icon(Icons.Default.DirectionsCar, null, tint = MaterialTheme.colorScheme.primary) }
+                ) {
+                    Icon(Icons.Default.DirectionsCar, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(28.dp))
+                }
                 Spacer(Modifier.width(12.dp))
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("i20 Mileage", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-                    Text("Your driving dashboard", style = MaterialTheme.typography.bodyMedium)
+                    Text("i20 Mileage", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text("Driving dashboard", style = MaterialTheme.typography.bodyMedium)
                 }
+                StatusPill(isTracking)
             }
         }
 
         item {
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(24.dp),
+                shape = RoundedCornerShape(26.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {
-                Column(modifier = Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(modifier = Modifier.padding(22.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(if (isTracking) "Tracking is on" else "Ready to track", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                             Text(
-                                if (activeTrip != null) "Drive detected. Distance is being recorded." else "Start tracking before you drive.",
-                                style = MaterialTheme.typography.bodyMedium
+                                if (isTracking) "TRIP IN PROGRESS" else "READY TO DRIVE",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.height(3.dp))
+                            Text(
+                                if (isTracking) "GPS distance recording"
+                                else "Tap Start before your journey",
+                                style = MaterialTheme.typography.bodyLarge
                             )
                         }
-                        Box(
-                            modifier = Modifier.size(12.dp).clip(CircleShape)
-                                .background(if (isTracking) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline)
-                        )
+                        Icon(Icons.Default.Timer, contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
                     }
-                    if (activeTrip != null) {
-                        Text("Current trip: ${formatKm(activeTrip.distanceMeters / 1000.0)} km", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                    }
+
+                    Text(
+                        activeTrip?.let { formatKm(it.distanceMeters / 1000.0) } ?: "0.0",
+                        style = MaterialTheme.typography.displaySmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text("CURRENT TRIP • km", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
+
                     Button(
                         onClick = if (isTracking) onStopTracking else onStartTracking,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp)
+                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                        shape = RoundedCornerShape(16.dp)
                     ) {
-                        Icon(if (isTracking) Icons.Default.Stop else Icons.Default.PlayArrow, null)
+                        Icon(if (isTracking) Icons.Default.Stop else Icons.Default.PlayArrow, contentDescription = null)
                         Spacer(Modifier.width(8.dp))
-                        Text(if (isTracking) "Stop tracking" else "Start tracking")
+                        Text(if (isTracking) "Stop & Save Trip" else "Start Tracking", fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
 
         item {
-            Text("Mileage", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        }
-
-        item {
-            Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp)) {
-                Row(modifier = Modifier.padding(20.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    MileageStat(
-                        modifier = Modifier.weight(1f),
-                        label = "Latest",
-                        value = latestMileage?.let { "${format1(it)} km/L" } ?: "--",
-                        icon = Icons.Default.Speed
-                    )
-                    MileageStat(
-                        modifier = Modifier.weight(1f),
-                        label = "Average",
-                        value = averageMileage?.let { "${format1(it)} km/L" } ?: "--",
-                        icon = Icons.Default.Favorite
-                    )
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                BigStat("Latest", latestMileage?.let { "${formatKm(it)} km/L" } ?: "--", Modifier.weight(1f))
+                BigStat("Average", averageMileage?.let { "${formatKm(it)} km/L" } ?: "--", Modifier.weight(1f))
             }
         }
 
         item {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                SmallMetric("Today", "${format1(todayDistanceKm)} km", Modifier.weight(1f))
-                SmallMetric("All trips", "${format1(totalDistanceKm)} km", Modifier.weight(1f))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                BigStat("Today", "${formatKm(todayDistanceKm)} km", Modifier.weight(1f))
+                BigStat("All trips", "${formatKm(totalDistanceKm)} km", Modifier.weight(1f))
             }
         }
 
         item {
             Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp)) {
                 Row(modifier = Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier.size(44.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
-                        contentAlignment = Alignment.Center
-                    ) { Icon(Icons.Default.LocalGasStation, null, tint = MaterialTheme.colorScheme.secondary) }
+                    Icon(Icons.Default.LocalGasStation, contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(30.dp))
                     Spacer(Modifier.width(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Fuel", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text("Fuel", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         Text(
-                            latestFuel?.let { "Last fill: ${format1(it.litersFilled)} L" } ?: "No fill-up recorded yet",
+                            latestFuel?.let { "Last fill: ${formatKm(it.litersFilled)} L" } ?: "No fill-up recorded yet",
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }
                     FilledTonalButton(onClick = onAddFuel) {
-                        Icon(Icons.Default.Add, null)
+                        Icon(Icons.Default.Add, contentDescription = null)
                         Spacer(Modifier.width(4.dp))
-                        Text("Add")
+                        Text("Add fuel")
                     }
                 }
             }
@@ -307,40 +356,69 @@ private fun DashboardScreen(
 }
 
 @Composable
-private fun MileageStat(modifier: Modifier, label: String, value: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(icon, null, tint = MaterialTheme.colorScheme.primary)
-        Spacer(Modifier.height(8.dp))
-        Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-        Text(label, style = MaterialTheme.typography.bodySmall)
+private fun StatusPill(isTracking: Boolean) {
+    val bg = if (isTracking) Color(0xFFDDF4E5) else Color(0xFFE9EEF3)
+    val fg = if (isTracking) Color(0xFF1D6A38) else Color(0xFF52606D)
+    Row(
+        modifier = Modifier.clip(RoundedCornerShape(50)).background(bg).padding(horizontal = 12.dp, vertical = 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(Modifier.size(8.dp).clip(CircleShape).background(fg))
+        Spacer(Modifier.width(7.dp))
+        Text(if (isTracking) "TRACKING" else "READY", color = fg, fontWeight = FontWeight.Bold,
+            style = MaterialTheme.typography.labelMedium)
     }
 }
 
 @Composable
-private fun SmallMetric(label: String, value: String, modifier: Modifier) {
-    Card(modifier = modifier, shape = RoundedCornerShape(18.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(label, style = MaterialTheme.typography.bodySmall)
-            Spacer(Modifier.height(4.dp))
-            Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+private fun BigStat(title: String, value: String, modifier: Modifier) {
+    Card(modifier = modifier, shape = RoundedCornerShape(20.dp)) {
+        Column(modifier = Modifier.padding(18.dp)) {
+            Text(title.uppercase(Locale.getDefault()), style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(7.dp))
+            Text(value, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold,
+                maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
 
 @Composable
-private fun TripRow(trip: Trip) {
-    Card(shape = RoundedCornerShape(18.dp)) {
-        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(
-                modifier = Modifier.size(40.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) { Icon(Icons.Default.DirectionsCar, null, tint = MaterialTheme.colorScheme.primary) }
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(formatDate(trip.startTimeMillis), fontWeight = FontWeight.SemiBold)
-                Text(if (trip.isActive) "In progress" else "Completed", style = MaterialTheme.typography.bodySmall)
+private fun FuelScreen(
+    modifier: Modifier,
+    fuelLogs: List<FuelLog>,
+    latestMileage: Double?,
+    onAddFuel: () -> Unit
+) {
+    LazyColumn(
+        modifier = modifier.fillMaxSize(),
+        contentPadding = PaddingValues(22.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Fuel & Mileage", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+                    Text("Record full-tank fills for accurate km/L", style = MaterialTheme.typography.bodyMedium)
+                }
+                FilledTonalButton(onClick = onAddFuel) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(Modifier.width(4.dp))
+                    Text("Add fill-up")
+                }
             }
-            Text("${format1(trip.distanceMeters / 1000.0)} km", fontWeight = FontWeight.Bold)
+        }
+        item {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                BigStat("Latest mileage", latestMileage?.let { "${formatKm(it)} km/L" } ?: "--", Modifier.weight(1f))
+                BigStat("Fill-ups", fuelLogs.size.toString(), Modifier.weight(1f))
+            }
+        }
+        if (fuelLogs.isEmpty()) {
+            item { EmptyState("No fuel records", "Add each full-tank fill-up to calculate real tank-to-tank mileage.") }
+        } else {
+            item { Text("Fill-up history", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+            items(fuelLogs, key = { it.id }) { FuelRow(it) }
         }
     }
 }
@@ -349,10 +427,10 @@ private fun TripRow(trip: Trip) {
 private fun HistoryScreen(modifier: Modifier, trips: List<Trip>, fuelLogs: List<FuelLog>) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(20.dp),
+        contentPadding = PaddingValues(22.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        item { Text("History", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold) }
+        item { Text("History", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) }
         item { Text("Trips and fuel entries", style = MaterialTheme.typography.bodyMedium) }
         if (trips.isEmpty() && fuelLogs.isEmpty()) {
             item { EmptyState("No history yet", "Your trips and fill-ups will appear here.") }
@@ -363,7 +441,25 @@ private fun HistoryScreen(modifier: Modifier, trips: List<Trip>, fuelLogs: List<
         }
         if (fuelLogs.isNotEmpty()) {
             item { Text("Fuel", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-            items(fuelLogs, key = { "fuel-${it.id}" }) { fuel -> FuelRow(fuel) }
+            items(fuelLogs, key = { "fuel-${it.id}" }) { FuelRow(it) }
+        }
+    }
+}
+
+@Composable
+private fun TripRow(trip: Trip) {
+    Card(shape = RoundedCornerShape(18.dp)) {
+        Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier.size(42.dp).clip(CircleShape).background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Default.DirectionsCar, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
+            Spacer(Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(formatDate(trip.startTimeMillis), fontWeight = FontWeight.SemiBold)
+                Text(if (trip.isActive) "In progress" else "Completed", style = MaterialTheme.typography.bodySmall)
+            }
+            Text("${formatKm(trip.distanceMeters / 1000.0)} km", fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -372,15 +468,19 @@ private fun HistoryScreen(modifier: Modifier, trips: List<Trip>, fuelLogs: List<
 private fun FuelRow(fuel: FuelLog) {
     Card(shape = RoundedCornerShape(18.dp)) {
         Row(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.LocalGasStation, null, tint = MaterialTheme.colorScheme.primary)
+            Box(
+                modifier = Modifier.size(42.dp).clip(CircleShape).background(MaterialTheme.colorScheme.secondaryContainer),
+                contentAlignment = Alignment.Center
+            ) { Icon(Icons.Default.LocalGasStation, contentDescription = null, tint = MaterialTheme.colorScheme.primary) }
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(formatDate(fuel.timestampMillis), fontWeight = FontWeight.SemiBold)
                 Text(if (fuel.isFullTank) "Full tank" else "Partial fill", style = MaterialTheme.typography.bodySmall)
+                fuel.odometerKm?.let { Text("Odometer ${formatKm(it)} km", style = MaterialTheme.typography.bodySmall) }
             }
             Column(horizontalAlignment = Alignment.End) {
-                Text("${format1(fuel.litersFilled)} L", fontWeight = FontWeight.Bold)
-                fuel.pricePerLiter?.let { Text("₹${format1(it)}/L", style = MaterialTheme.typography.bodySmall) }
+                Text("${formatKm(fuel.litersFilled)} L", fontWeight = FontWeight.Bold)
+                fuel.pricePerLiter?.let { Text("₹${formatKm(it)}/L", style = MaterialTheme.typography.bodySmall) }
             }
         }
     }
@@ -389,24 +489,35 @@ private fun FuelRow(fuel: FuelLog) {
 @Composable
 private fun SettingsScreen(modifier: Modifier) {
     Column(
-        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(22.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Text("Settings", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Text("Settings", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         Card(shape = RoundedCornerShape(22.dp)) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text("Hyundai i20", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                Text("GPS-based mileage tracker", style = MaterialTheme.typography.bodyMedium)
-                HorizontalDivider()
-                Text("Mileage method", fontWeight = FontWeight.SemiBold)
-                Text("Full-tank to full-tank distance divided by litres added at the later fill-up.", style = MaterialTheme.typography.bodyMedium)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.DirectionsCar, contentDescription = null, modifier = Modifier.size(30.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Column {
+                        Text("Hyundai i20", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text("GPS mileage tracker", style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+                Divider()
+                Text("Mileage calculation", fontWeight = FontWeight.Bold)
+                Text("Mileage is calculated from the distance between two full-tank fill-ups divided by the litres added at the later fill-up.")
             }
         }
         Card(shape = RoundedCornerShape(22.dp)) {
             Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Tracking tips", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                Text("Keep location permission enabled and allow background access so trips can be recorded while the phone is locked.")
-                Text("For the most useful mileage numbers, record every full-tank fill-up accurately.")
+                Text("GPS tracking", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("The app now calculates trip distance from GPS position changes instead of relying on the vehicle speed value. This is more reliable on Android car head units that report GPS speed as 0.")
+            }
+        }
+        Card(shape = RoundedCornerShape(22.dp)) {
+            Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("For accurate mileage", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                Text("Keep location permission enabled, allow background location when requested, and record every full-tank fill-up.")
             }
         }
     }
@@ -416,9 +527,10 @@ private fun SettingsScreen(modifier: Modifier) {
 private fun EmptyState(title: String, message: String) {
     Card(modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(22.dp)) {
         Column(modifier = Modifier.padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(Icons.Default.DirectionsCar, null, modifier = Modifier.size(42.dp))
+            Icon(Icons.Default.DirectionsCar, contentDescription = null, modifier = Modifier.size(42.dp))
             Spacer(Modifier.height(10.dp))
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Spacer(Modifier.height(4.dp))
             Text(message, style = MaterialTheme.typography.bodyMedium)
         }
     }
@@ -439,15 +551,13 @@ private fun AddFuelDialog(
         onDismissRequest = onDismiss,
         title = { Text("Add fuel fill-up") },
         text = {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(9.dp)) {
                 OutlinedTextField(liters, { liters = it }, label = { Text("Litres added") }, singleLine = true)
-                OutlinedTextField(price, { price = it }, label = { Text("Price per litre (optional)") }, singleLine = true)
-                OutlinedTextField(odometer, { odometer = it }, label = { Text("Odometer km (optional)") }, singleLine = true)
+                OutlinedTextField(price, { price = it }, label = { Text("Price per litre") }, singleLine = true)
+                OutlinedTextField(odometer, { odometer = it }, label = { Text("Odometer km") }, singleLine = true)
                 OutlinedTextField(notes, { notes = it }, label = { Text("Notes (optional)") }, singleLine = true)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = fullTank, onCheckedChange = { fullTank = it })
-                    Text("This was a full-tank fill-up")
-                }
+                androidx.compose.material3.Checkbox(checked = fullTank, onCheckedChange = { fullTank = it })
+                Text("This was a full-tank fill-up")
             }
         },
         confirmButton = {
@@ -462,12 +572,11 @@ private fun AddFuelDialog(
                         notes.trim().ifBlank { null }
                     )
                 }
-            ) { Text("Save") }
+            ) { Text("Save fill-up") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
     )
 }
 
-private fun format1(value: Double): String = String.format(Locale.US, "%.1f", value)
 private fun formatKm(value: Double): String = String.format(Locale.US, "%.1f", value)
 private fun formatDate(time: Long): String = SimpleDateFormat("dd MMM, hh:mm a", Locale.getDefault()).format(Date(time))

@@ -1,7 +1,8 @@
 package com.example.i20mileage.service
 
-import android.app.*
-import android.content.Context
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.location.Location
@@ -10,16 +11,26 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import com.example.i20mileage.data.AppDatabase
 import com.example.i20mileage.data.Trip
-import com.google.android.gms.location.*
-import kotlinx.coroutines.*
+import com.google.android.gms.location.FusedLocationProviderClient
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
- * Runs as a foreground service so Android doesn't kill GPS updates in the background.
+ * Foreground GPS service used while the user explicitly has tracking enabled.
  *
- * Logic:
- *  - Speed > MOVING_THRESHOLD_MPS for STARTUP_HOLD_MS  -> start (or resume) a trip
- *  - Speed < STOPPED_THRESHOLD_MPS for STOP_HOLD_MS     -> end the trip
- *  - While a trip is active, accumulate distance between consecutive GPS fixes
+ * Important: we do NOT depend on Location.speed to decide whether the car is moving.
+ * Many Android head units report speed as 0 even while GPS position is changing.
+ * Distance is therefore calculated from consecutive valid GPS coordinates instead.
  */
 class TripLoggingService : Service() {
 
@@ -29,24 +40,28 @@ class TripLoggingService : Service() {
 
     private var lastLocation: Location? = null
     private var activeTrip: Trip? = null
-    private var lastMovingTimestamp = 0L
-    private var lastStoppedTimestamp = 0L
+    private val locationMutex = Mutex()
 
     companion object {
         const val CHANNEL_ID = "trip_logging_channel"
         const val NOTIF_ID = 1001
         const val ACTION_STOP = "com.example.i20mileage.action.STOP"
 
-        private const val MOVING_THRESHOLD_MPS = 1.4f   // ~5 km/h
-        private const val STOPPED_THRESHOLD_MPS = 0.5f  // ~1.8 km/h
-        private const val STARTUP_HOLD_MS = 10_000L     // must be moving 10s before we count it a trip
-        private const val STOP_HOLD_MS = 3 * 60_000L    // 3 min stationary = trip ended (parked, not a red light)
+        // GPS fixes that are too inaccurate should not affect mileage.
+        private const val MAX_ACCURACY_METERS = 60f
+
+        // A normal 3-5 second GPS update should never jump hundreds of kilometres.
+        // A generous ceiling avoids rejecting legitimate highway movement.
+        private const val MAX_DELTA_METERS = 500f
+
+        // If GPS disappears for a long time, establish a new baseline instead of
+        // counting the entire gap as driving distance.
+        private const val MAX_GAP_MILLIS = 90_000L
     }
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(result: LocationResult) {
-            val loc = result.lastLocation ?: return
-            handleNewLocation(loc)
+            result.locations.forEach(::handleNewLocation)
         }
     }
 
@@ -65,15 +80,23 @@ class TripLoggingService : Service() {
             }
             return START_NOT_STICKY
         }
-        startForeground()
-        startLocationUpdates()
+
+        startForegroundServiceNotification()
+
+        // Recover an active trip before accepting GPS callbacks. This also makes
+        // tracking resilient if Android recreates the service.
+        scope.launch {
+            activeTrip = db.tripDao().getActiveTrip()
+            startLocationUpdates()
+        }
+
         return START_STICKY
     }
 
-    private fun startForeground() {
+    private fun startForegroundServiceNotification() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("i20 Mileage Tracker")
-            .setContentText("Tracking your drive...")
+            .setContentText("Recording GPS distance")
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setOngoing(true)
             .build()
@@ -86,65 +109,55 @@ class TripLoggingService : Service() {
     }
 
     private fun startLocationUpdates() {
-        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 5_000L)
-            .setMinUpdateIntervalMillis(3_000L)
+        val request = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 3_000L)
+            .setMinUpdateIntervalMillis(2_000L)
+            .setMaxUpdateDelayMillis(6_000L)
             .build()
+
         try {
             fusedClient.requestLocationUpdates(request, locationCallback, mainLooper)
-        } catch (e: SecurityException) {
-            // Location permission not granted — handle in UI layer before starting this service.
+        } catch (_: SecurityException) {
+            // Permissions are checked before the service is started.
         }
     }
 
-    private fun handleNewLocation(loc: Location) {
-        val speed = loc.speed // meters/sec, from GPS
-        val now = System.currentTimeMillis()
+    private fun handleNewLocation(location: Location) {
+        if (!location.hasAccuracy() || location.accuracy > MAX_ACCURACY_METERS) return
 
-        if (speed >= MOVING_THRESHOLD_MPS) {
-            lastStoppedTimestamp = 0L
-            if (lastMovingTimestamp == 0L) lastMovingTimestamp = now
-
-            val movingLongEnough = now - lastMovingTimestamp >= STARTUP_HOLD_MS
-            if (movingLongEnough) {
-                scope.launch {
-                    if (activeTrip == null) {
-                        activeTrip = db.tripDao().getActiveTrip() ?: run {
-                            val newTrip = Trip(startTimeMillis = now)
-                            val id = db.tripDao().insert(newTrip)
-                            newTrip.copy(id = id)
-                        }
+        scope.launch {
+            locationMutex.withLock {
+                if (activeTrip == null) {
+                activeTrip = db.tripDao().getActiveTrip()
+                    ?: run {
+                        val trip = Trip(startTimeMillis = System.currentTimeMillis())
+                        val id = db.tripDao().insert(trip)
+                        trip.copy(id = id)
                     }
-                    accumulateDistance(loc)
+            }
+
+            val previous = lastLocation
+            val timeGap = if (previous == null) 0L else location.time - previous.time
+
+            if (previous != null && timeGap in 1..MAX_GAP_MILLIS) {
+                val deltaMeters = previous.distanceTo(location)
+
+                // Ignore GPS jitter and implausible jumps. A 0.5m lower bound
+                // prevents tiny stationary movements from inflating mileage.
+                if (deltaMeters >= 0.5f && deltaMeters <= MAX_DELTA_METERS) {
+                    val trip = activeTrip ?: return@launch
+                    trip.distanceMeters += deltaMeters.toDouble()
+                    db.tripDao().update(trip)
                 }
             }
-        } else if (speed <= STOPPED_THRESHOLD_MPS) {
-            lastMovingTimestamp = 0L
-            if (lastStoppedTimestamp == 0L) lastStoppedTimestamp = now
 
-            val stoppedLongEnough = now - lastStoppedTimestamp >= STOP_HOLD_MS
-            if (stoppedLongEnough) {
-                scope.launch { endActiveTrip(now) }
-            }
-        }
-
-        lastLocation = loc
-    }
-
-    private suspend fun accumulateDistance(loc: Location) {
-        val prev = lastLocation
-        val trip = activeTrip ?: return
-        if (prev != null) {
-            val deltaMeters = prev.distanceTo(loc)
-            // Ignore GPS jitter spikes when stationary (e.g. > 100m in one 3-5s fix is implausible in traffic)
-            if (deltaMeters in 0.5..300.0) {
-                trip.distanceMeters += deltaMeters
-                db.tripDao().update(trip)
+                // Only accepted/usable GPS fixes become the next distance baseline.
+                lastLocation = Location(location)
             }
         }
     }
 
     private suspend fun endActiveTrip(now: Long) {
-        val trip = activeTrip ?: return
+        val trip = activeTrip ?: db.tripDao().getActiveTrip() ?: return
         trip.endTimeMillis = now
         trip.isActive = false
         db.tripDao().update(trip)
@@ -155,9 +168,12 @@ class TripLoggingService : Service() {
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
-                CHANNEL_ID, "Trip Logging", NotificationManager.IMPORTANCE_LOW
+                CHANNEL_ID,
+                "Trip Logging",
+                NotificationManager.IMPORTANCE_LOW
             )
-            getSystemService(NotificationManager::class.java).createNotificationChannel(channel)
+            getSystemService(NotificationManager::class.java)
+                .createNotificationChannel(channel)
         }
     }
 
@@ -168,10 +184,4 @@ class TripLoggingService : Service() {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
-}
-
-private fun Context.startTripLoggingService() {
-    val intent = Intent(this, TripLoggingService::class.java)
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
-    else startService(intent)
 }
