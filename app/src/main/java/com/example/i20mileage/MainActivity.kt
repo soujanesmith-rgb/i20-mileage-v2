@@ -62,6 +62,9 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -309,6 +312,11 @@ private fun DashboardScreen(
     latestFuel: FuelLog?
 ) {
     val tripDistance = activeTrip?.distanceMeters?.div(1000.0) ?: 0.0
+    val animatedTripDistance by animateFloatAsState(
+        targetValue = tripDistance.toFloat(),
+        animationSpec = tween(durationMillis = 1000, easing = LinearEasing),
+        label = "tripDistance"
+    )
     val tripDuration = activeTrip?.let { formatDuration(it.startTimeMillis, System.currentTimeMillis()) }
 
     LazyColumn(
@@ -343,7 +351,7 @@ private fun DashboardScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(if (isTracking) "CURRENT TRIP" else "READY TO DRIVE", color = TextSecondary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            Text(formatTripDistance(tripDistance), color = TextPrimary, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+                            Text(formatTripDistance(animatedTripDistance.toDouble()), color = TextPrimary, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
                             Text("km", color = Cyan, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             if (isTracking) Text(tripDuration ?: "00:00", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
                         }
@@ -686,7 +694,7 @@ private fun StatPair(label: String, value: String) {
 }
 
 private fun formatOneDecimal(value: Double): String = String.format(Locale.US, "%,.1f", value)
-private fun formatTripDistance(value: Double): String = String.format(Locale.US, "%.4f", value)
+private fun formatTripDistance(value: Double): String = String.format(Locale.US, "%.3f", value)
 private fun formatWhole(value: Double): String = String.format(Locale.US, "%,.0f", value)
 private fun formatMileage(value: Double?): String = value?.let { String.format(Locale.US, "%.1f", it) } ?: "—"
 private fun formatKm(value: Double): String = String.format(Locale.US, "%.1f", value)
