@@ -343,7 +343,7 @@ private fun DashboardScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(if (isTracking) "CURRENT TRIP" else "READY TO DRIVE", color = TextSecondary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-                            Text(formatOneDecimal(tripDistance), color = TextPrimary, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+                            Text(formatTripDistance(tripDistance), color = TextPrimary, style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
                             Text("km", color = Cyan, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                             if (isTracking) Text(tripDuration ?: "00:00", color = TextSecondary, style = MaterialTheme.typography.labelMedium)
                         }
@@ -686,6 +686,7 @@ private fun StatPair(label: String, value: String) {
 }
 
 private fun formatOneDecimal(value: Double): String = String.format(Locale.US, "%,.1f", value)
+private fun formatTripDistance(value: Double): String = String.format(Locale.US, "%.4f", value)
 private fun formatWhole(value: Double): String = String.format(Locale.US, "%,.0f", value)
 private fun formatMileage(value: Double?): String = value?.let { String.format(Locale.US, "%.1f", it) } ?: "—"
 private fun formatKm(value: Double): String = String.format(Locale.US, "%.1f", value)
