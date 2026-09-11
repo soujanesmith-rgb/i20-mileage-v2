@@ -46,6 +46,8 @@ class TripLoggingService : Service() {
         const val CHANNEL_ID = "trip_logging_channel"
         const val NOTIF_ID = 1001
         const val ACTION_STOP = "com.example.i20mileage.action.STOP"
+        const val ACTION_SPEED_UPDATE = "com.example.i20mileage.action.SPEED_UPDATE"
+        const val EXTRA_SPEED_KMH = "extra_speed_kmh"
 
         // GPS fixes that are too inaccurate should not affect mileage.
         private const val MAX_ACCURACY_METERS = 60f
@@ -137,6 +139,7 @@ class TripLoggingService : Service() {
 
             val previous = lastLocation
             val timeGap = if (previous == null) 0L else location.time - previous.time
+            var derivedSpeedKmh = 0f
 
             if (previous != null && timeGap in 1..MAX_GAP_MILLIS) {
                 val deltaMeters = previous.distanceTo(location)
@@ -147,11 +150,24 @@ class TripLoggingService : Service() {
                     val trip = activeTrip ?: return@launch
                     trip.distanceMeters += deltaMeters.toDouble()
                     db.tripDao().update(trip)
+                    derivedSpeedKmh = (deltaMeters / (timeGap / 1000f)) * 3.6f
                 }
             }
 
-                // Only accepted/usable GPS fixes become the next distance baseline.
-                lastLocation = Location(location)
+            // Prefer GPS-reported speed when available. Some head units report 0,
+            // so fall back to speed derived from the coordinate change.
+            val speedKmh = when {
+                location.hasSpeed() && location.speed >= 0.5f -> location.speed * 3.6f
+                derivedSpeedKmh >= 0.5f -> derivedSpeedKmh
+                else -> 0f
+            }.coerceIn(0f, 220f)
+            sendBroadcast(Intent(ACTION_SPEED_UPDATE).apply {
+                putExtra(EXTRA_SPEED_KMH, speedKmh)
+                setPackage(packageName)
+            })
+
+            // Only accepted/usable GPS fixes become the next distance baseline.
+            lastLocation = Location(location)
             }
         }
     }
@@ -163,6 +179,10 @@ class TripLoggingService : Service() {
         db.tripDao().update(trip)
         activeTrip = null
         lastLocation = null
+        sendBroadcast(Intent(ACTION_SPEED_UPDATE).apply {
+            putExtra(EXTRA_SPEED_KMH, 0f)
+            setPackage(packageName)
+        })
     }
 
     private fun createNotificationChannel() {
