@@ -360,7 +360,7 @@ private fun DashboardScreen(
     )
     val animatedSpeed by animateFloatAsState(
         targetValue = currentSpeedKmh.coerceIn(0f, 220f),
-        animationSpec = tween(durationMillis = 450, easing = LinearEasing),
+        animationSpec = tween(durationMillis = 180, easing = LinearEasing),
         label = "speed"
     )
     val tripDuration = activeTrip?.let { formatDuration(it.startTimeMillis, if (it.isActive) nowMillis else it.endTimeMillis ?: nowMillis) }
@@ -552,7 +552,7 @@ private fun SpeedometerPanel(modifier: Modifier, speedKmh: Float) {
 private fun Speedometer(speedKmh: Float) {
     BoxWithConstraints(modifier = Modifier.fillMaxWidth().aspectRatio(1f), contentAlignment = Alignment.Center) {
         val dialSize = minOf(maxWidth.value, maxHeight.value).dp
-        val animatedArc by animateFloatAsState(speedKmh / 220f, tween(450), label = "speedArc")
+        val animatedArc by animateFloatAsState(speedKmh / 220f, tween(180), label = "speedArc")
         Canvas(modifier = Modifier.size(dialSize)) {
             val center = androidx.compose.ui.geometry.Offset(this.size.width / 2f, this.size.height / 2f)
             val radius = this.size.minDimension * 0.40f
@@ -596,8 +596,22 @@ private fun Speedometer(speedKmh: Float) {
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text("SPEED", color = TextSecondary, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
-            Text(speedKmh.roundToInt().toString(), color = TextPrimary, style = MaterialTheme.typography.displayMedium, fontWeight = FontWeight.Bold)
-            Text("km/h", color = Cyan, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.Center) {
+                Text(
+                    speedKmh.roundToInt().toString(),
+                    color = TextPrimary,
+                    style = MaterialTheme.typography.displayMedium,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    "km/h",
+                    color = Cyan,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
         }
         Text("0", color = TextSecondary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.BottomStart).padding(start = 30.dp, bottom = 24.dp))
         Text("110", color = TextSecondary, style = MaterialTheme.typography.labelSmall, modifier = Modifier.align(Alignment.TopCenter).padding(top = 18.dp))

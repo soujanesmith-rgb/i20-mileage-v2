@@ -40,6 +40,7 @@ class TripLoggingService : Service() {
 
     private var lastLocation: Location? = null
     private var activeTrip: Trip? = null
+    private var smoothedSpeedKmh = 0f
     private val locationMutex = Mutex()
 
     companion object {
@@ -48,6 +49,11 @@ class TripLoggingService : Service() {
         const val ACTION_STOP = "com.example.i20mileage.action.STOP"
         const val ACTION_SPEED_UPDATE = "com.example.i20mileage.action.SPEED_UPDATE"
         const val EXTRA_SPEED_KMH = "extra_speed_kmh"
+
+        // Speed is smoothed before it reaches the dashboard so the needle and
+        // digital readout do not jump with normal GPS noise.
+        private const val SPEED_SMOOTHING_ALPHA = 0.22f
+        private const val SPEED_STOP_THRESHOLD_KMH = 1.5f
 
         // GPS fixes that are too inaccurate should not affect mileage.
         private const val MAX_ACCURACY_METERS = 60f
@@ -156,13 +162,28 @@ class TripLoggingService : Service() {
 
             // Prefer GPS-reported speed when available. Some head units report 0,
             // so fall back to speed derived from the coordinate change.
-            val speedKmh = when {
+            val rawSpeedKmh = when {
                 location.hasSpeed() && location.speed >= 0.5f -> location.speed * 3.6f
                 derivedSpeedKmh >= 0.5f -> derivedSpeedKmh
                 else -> 0f
             }.coerceIn(0f, 220f)
+
+            // Exponential moving average. It is deliberately light enough to
+            // keep the speedometer responsive while removing GPS jitter.
+            smoothedSpeedKmh = when {
+                rawSpeedKmh <= SPEED_STOP_THRESHOLD_KMH -> {
+                    // Let the display settle quickly when the vehicle stops.
+                    smoothedSpeedKmh * 0.45f
+                }
+                else -> {
+                    smoothedSpeedKmh + SPEED_SMOOTHING_ALPHA * (rawSpeedKmh - smoothedSpeedKmh)
+                }
+            }.coerceIn(0f, 220f)
+
+            if (smoothedSpeedKmh < 0.5f) smoothedSpeedKmh = 0f
+
             sendBroadcast(Intent(ACTION_SPEED_UPDATE).apply {
-                putExtra(EXTRA_SPEED_KMH, speedKmh)
+                putExtra(EXTRA_SPEED_KMH, smoothedSpeedKmh)
                 setPackage(packageName)
             })
 
@@ -179,6 +200,7 @@ class TripLoggingService : Service() {
         db.tripDao().update(trip)
         activeTrip = null
         lastLocation = null
+        smoothedSpeedKmh = 0f
         sendBroadcast(Intent(ACTION_SPEED_UPDATE).apply {
             putExtra(EXTRA_SPEED_KMH, 0f)
             setPackage(packageName)
@@ -199,6 +221,7 @@ class TripLoggingService : Service() {
 
     override fun onDestroy() {
         fusedClient.removeLocationUpdates(locationCallback)
+        smoothedSpeedKmh = 0f
         scope.cancel()
         super.onDestroy()
     }
