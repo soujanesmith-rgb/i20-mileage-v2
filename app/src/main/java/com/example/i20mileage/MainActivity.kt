@@ -321,7 +321,7 @@ private fun CarSilhouette(modifier: Modifier) {
             close()
         }
         drawPath(p, Brush.horizontalGradient(listOf(Color(0xFF0076C9), Blue, Cyan.copy(alpha=.8f))), style = Stroke(width = 3f))
-        drawLine(Offset(size.width*.29f, size.height*.45f), Offset(size.width*.65f, size.height*.42f), Color(0xFF0A8CD9), 2f)
+        drawLine(Color(0xFF0A8CD9), Offset(size.width*.29f, size.height*.45f), Offset(size.width*.65f, size.height*.42f), strokeWidth = 2f)
         drawCircle(Blue, size.height*.10f, Offset(size.width*.27f, size.height*.72f))
         drawCircle(Blue, size.height*.10f, Offset(size.width*.78f, size.height*.72f))
     }
